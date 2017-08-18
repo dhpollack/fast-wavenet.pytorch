@@ -98,4 +98,16 @@ ENV/
 /site
 
 # mypy
-.mypy_cache/
+.mypy_cache
+
+# data folders
+data/yesno/
+
+# specific file types
+*.pt
+*.wav
+*.mp3
+*.png
+
+# keep files
+!test/data/david.wav
