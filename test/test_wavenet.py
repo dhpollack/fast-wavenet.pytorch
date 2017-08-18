@@ -11,7 +11,7 @@ from test.models import *
 import numpy as np
 
 class Test_wavenet(unittest.TestCase):
-    self.use_cuda = torch.cuda.is_available()
+    use_cuda = torch.cuda.is_available()
     def test1_wavenet_mono(self):
         num_samples = 1<<12
         input = Variable(torch.rand(1, 1, num_samples))
