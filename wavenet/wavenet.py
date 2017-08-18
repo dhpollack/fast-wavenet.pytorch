@@ -202,7 +202,7 @@ class FastWaveNet(nn.Module):
 
             s = x
             if x.size(2) != 1:
-                s, pad_skip = dilate(x, 1)
+                s, pad_skip = dilate(x, self.audio_channels)
             s = self.skip_convs[i](s)
 
             try:
@@ -211,15 +211,16 @@ class FastWaveNet(nn.Module):
                 skip = 0
             if isinstance(skip, torch.Tensor):
                 print(skip.size())
-            skip = s + skip
+            skip = s + skip # Note the skip is ultimately part of the output
+            self.sizes.append(("skip size:",)+skip.size())
 
-            self.sizes.append(x.size())
             x = self.residual_convs[i](x)
             x = x + res[:, :, (self.kernel_size - 1):]
             self.sizes.append(x.size())
 
         # the multiple non-linearities modeled after tensorflow version
-        x = self.nl_out(x)
+        #x = self.nl_out(x)
+        x = self.nl_out(skip)
         x = self.conv_out(x)
         self.sizes.append("last conv before resize")
         self.sizes.append(x.size())
