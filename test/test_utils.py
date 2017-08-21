@@ -36,8 +36,5 @@ class Test_mu_law(unittest.TestCase):
         factors_calc = list(prime_factors(num))
         self.assertEqual(factors_true, factors_calc, print(factors_calc))
 
-def main():
-    unittest.main()
-
 if __name__ == '__main__':
-    main()
+    unittest.main()

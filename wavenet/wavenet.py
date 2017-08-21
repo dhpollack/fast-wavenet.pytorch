@@ -91,12 +91,15 @@ class FastWaveNet(nn.Module):
         self.residual_convs = []
         self.skip_convs = []
 
+        # filter non-linearity
+        self.filter_act = F.tanh
+
         # non-linearity in "pre-softmax" layers
+        self.nl_out = nn.ReLU()
+        self.nl_end = nn.ReLU()
         #self.nl1 = nn.SELU
         #self.nl1 = nn.Hardtanh
         #self.nl2 = nn.PReLU(self.quantization_channels)
-        self.nl_out = nn.ReLU()
-        self.nl_end = nn.ReLU()
 
         # initial convolution
         self.conv0 = Conv1dExt(in_channels=audio_channels,
@@ -138,11 +141,9 @@ class FastWaveNet(nn.Module):
                                                  kernel_size=1,
                                                  bias=False))
                 receptive_field += additional_scope
-                print("receptive field (layer: {}, block: {}): {}".format(l+1, b+1, receptive_field))
-                #additional_scope <<= 1 # same as *= 2
+                #print("receptive field (layer: {}, block: {}): {}".format(l+1, b+1, receptive_field))
                 additional_scope *= self.scope_mul[0]
                 init_dilation = new_dilation
-                #new_dilation <<= 1
                 new_dilation *= self.scope_mul[0]
                 self.scope_mul.rotate(-1)
 
@@ -191,7 +192,7 @@ class FastWaveNet(nn.Module):
                 print("pad_res: {}".format(pad_res))
                 pass
             fil = self.filter_convs[i](res)
-            fil = F.tanh(fil)
+            fil = self.filter_act(fil)
 
             gate = self.gate_convs[i](res)
             gate = F.sigmoid(gate)
@@ -206,11 +207,11 @@ class FastWaveNet(nn.Module):
             s = self.skip_convs[i](s)
 
             try:
+                # this is designed to remove the front padding
                 skip = skip[:, :, -s.size(2):]
             except:
                 skip = 0
-            if isinstance(skip, torch.Tensor):
-                print(skip.size())
+
             skip = s + skip # Note the skip is ultimately part of the output
             self.sizes.append(("skip size:",)+skip.size())
 
@@ -219,12 +220,11 @@ class FastWaveNet(nn.Module):
             self.sizes.append(x.size())
 
         # the multiple non-linearities modeled after tensorflow version
-        #x = self.nl_out(x)
         x = self.nl_out(skip)
         x = self.conv_out(x)
         self.sizes.append("last conv before resize")
         self.sizes.append(x.size())
-        x, _ = dilate(x, self.audio_channels)
+        x, _ = dilate(x, self.audio_channels) # only works with 1 channel for now
         x = self.nl_end(x)
         x = self.conv_end(x)
         self.sizes.append(x.size())

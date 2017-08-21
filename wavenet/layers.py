@@ -5,109 +5,13 @@ import torch.nn.functional as F
 from torch.nn import Parameter
 from torch.autograd import Variable
 
-'''WaveNetLayer does not appear to be used in the final model
-class WaveNetLayer(nn.Module):
-    r"""Base module of the WaveNet architecture. Applies dilation and a 1D convolution over a multi-channel input signal.
-        Allows optional residual connection if the number of input channels equals the number of output channels.
-        based on code from: https://github.com/vincentherrmann/pytorch-wavenet
+'''based on code from: https://github.com/vincentherrmann/pytorch-wavenet
+    also see:
+        https://github.com/musyoku/wavenet
+        https://github.com/ibab/tensorflow-wavenet
+        https://github.com/tomlepaine/fast-wavenet
 
-        Args:
-            in_channels (int): Number of input channels. Should be the size of the second dimension of the input tensor
-            out_channels (int): Number of channels produced by the convolution
-            kernel_size (int): Size of the convolution kernel
-            dilation (int): Target dilation, affects dimensions 0 and 2 of the input tensor
-            dilation_init (int): Initial dilation of the input
-            residual_connection (bool): If true, the dilated input will be added to the output of the convolution
-        Shape:
-            - Input: :math:`N_{in}, C, L_{in}`
-            - Output: :math:`N_{out}, C, L_{out}` where
-              :math:`d = dilation / dilation_init`,
-              :math:`N_{out} = floor(N_{in} * d)`
-              :math:`L_{out} = floor(L_{in} / d)`
-    """
 
-    def __init__(self,
-                 in_channels,
-                 out_channels,
-                 kernel_size=2,
-                 dilation=2,
-                 init_dilation=1, # strongly consider removing this
-                 residual_connection=True):
-
-        super(WaveNetLayer, self).__init__()
-        self.kernel_size = kernel_size
-        self.dilation = dilation
-        self.init_dilation = init_dilation
-        self.residual = residual_connection
-
-        self.dil_conv = nn.Conv1d(in_channels=in_channels,
-                                  out_channels=out_channels,
-                                  kernel_size=kernel_size,
-                                  bias=False)
-
-        self.onexone_conv = nn.Conv1d(in_channels=out_channels,
-                                      out_channels=out_channels,
-                                      kernel_size=1,
-                                      bias=False)
-
-        self.pad1d = pad1d
-        #TODO
-        self.queue = DilatedQueue(max_length=(kernel_size - 1) * dilation + 1,
-                                  num_channels=in_channels,
-                                  dilation=dilation)
-
-    def forward(self, input):
-
-        #		|
-        # +----add
-        # |		|
-        # |	   1x1
-        # |		|
-        # |	   ReLU
-        # |		|
-        # |	   dil_conv
-        # |		|
-        # |	   ReLU
-        # +-----|
-
-        input = dilate(input,
-                       dilation=self.dilation,
-                       init_dilation=self.init_dilation)
-        r = F.relu(input)
-
-        # zero padding for convolution
-        l = r.size(2)
-        if l < self.kernel_size:
-            padding = (self.kernel_size - l, 0, 0, 0)
-            r = self.pad1d(r, padding)
-
-        r = self.dil_conv(r)
-        r = F.relu(r)
-        r = self.onexone_conv(r)
-
-        if self.residual:
-            input = input[:, :, (self.kernel_size - 1):]
-            #r = r + input.expand_as(r) # expands input singleton dims to r size
-            print(r.size(), input.size())
-            r = r + input # 0.2 broadcasting
-        return r
-
-    def generate(self, new_sample):
-        self.queue.enqueue(new_sample)
-        input = self.queue.dequeue(num_deq=sekf.kernel_size,
-                                   dilation=self.dilation)
-        input.unsqueeze_(0)
-
-        r = F.relu(input)
-        r = self.dil_conv(r)
-        r = F.relu(r)
-        r = self.onexone_conv(r)
-
-        if self.residual:
-            input = input[:, :, (self.kernel_size - 1):]
-            #r = r + input.expand_as(r)
-            r = r + input # 0.2 broadcasting
-        return r
 '''
 
 class Conv1dExt(nn.Conv1d):

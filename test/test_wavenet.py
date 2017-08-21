@@ -3,6 +3,7 @@ import torch
 import torchaudio # one could replace torchaudio.load with scipy.io.wavfile.read
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.optim import lr_scheduler
 from torch.autograd import Variable
 from wavenet.layers import *
 from wavenet.utils import *
@@ -129,7 +130,7 @@ class Test_wavenet(unittest.TestCase):
         for l_i, l_j, in zip(losses[-1:], losses[1:]):
             self.assertTrue(l_j >= l_i)
 
-    def test4_wavenet_music(self):
+    def test4_wavenet_audio(self):
         try:
             import matplotlib.pyplot as plt
         except ImportError:
@@ -160,8 +161,12 @@ class Test_wavenet(unittest.TestCase):
                         input_len=num_samples,
                         audio_channels=1,
                         kernel_size=2)
+
+        epochs = 250
+
         criterion = torch.nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(m.parameters(), lr=0.01)
+        scheduler = lr_scheduler.StepLR(optimizer, step_size=epochs//3)
 
         if self.use_cuda:
             m = m.cuda()
@@ -169,9 +174,9 @@ class Test_wavenet(unittest.TestCase):
             input, labels = input.cuda(), labels.cuda()
         input, labels = Variable(input), Variable(labels)
 
-        epochs = 100
         losses = []
         for epoch in range(epochs):
+            scheduler.step()
             m.zero_grad()
             output = m(input)
             output.squeeze_()
@@ -205,15 +210,15 @@ class Test_wavenet(unittest.TestCase):
             ax[1].plot(output)
             f.savefig("test/test_wavenet_audio.png")
 
+            plt.figure()
+            plt.plot(losses)
+            plt.savefig("test/test_wavenet_audio_loss.png")
+
         output = torch.from_numpy(output) * (1 << 30)
         output = output.unsqueeze(1).long()
         #output = output.float()
 
         torchaudio.save("test/data/david_16000hz_output_sample.wav", output, sr//3)
 
-
-def main():
-    unittest.main()
-
 if __name__ == '__main__':
-    main()
+    unittest.main()
