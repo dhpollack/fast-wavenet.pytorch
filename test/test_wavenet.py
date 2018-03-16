@@ -115,8 +115,10 @@ class Test_wavenet(unittest.TestCase):
         if plt is not None:
             input = input.data.float().numpy().ravel()
 
-            output = F.softmax(output.t())
-            output = output.max(0)[1].data.float().numpy()
+            print('output size: {}'.format(output.size()))
+            output = F.softmax(output, dim=1)
+            print('output size: {}'.format(output.size()))
+            output = output.max(1)[1].data.float().numpy()
             output = mu_law_expansion(output, 256)
             print(input.shape, output.shape)
             print(input.min(), input.max(), output.min(), output.max())

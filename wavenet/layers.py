@@ -23,8 +23,7 @@ class Conv1dExt(nn.Conv1d):
 
     def init_ncc(self):
         w = self.weight.view(self.weight.size(0), -1) # (G, F*J) what are these?
-        #mean = torch.mean(w, dim=1).unsqueeze(1).expand_as(w)
-        mean = torch.mean(w, dim=1).unsqueeze(1) # 0.2 broadcasting
+        mean = torch.mean(w, dim=1, keepdim=True) # 0.2 broadcasting
         self.t0_factor = w - mean
         self.t0_norm = torch.norm(w, p=2, dim=1) # p=2 is the L2 norm
         self.start_ncc = Variable(torch.zeros(self.out_channels))
@@ -37,8 +36,7 @@ class Conv1dExt(nn.Conv1d):
             ncc = w.squeeze() / torch.norm(self.t0_norm, p=2)
             ncc = ncc - self.start_ncc
             return ncc
-        #mean = torch.mean(w, dim=1).unsqueeze(1).expand_as(w)
-        mean = torch.mean(w, dim=1).unsqueeze(1) # 0.2 broadcasting
+        mean = torch.mean(w, dim=1, keepdim=True) # 0.2 broadcasting
         t_factor = w - mean
         h_product = self.t0_factor * t_factor
         cov = torch.sum(h_product, dim=1) # (w.size(1) - 1)
@@ -146,6 +144,9 @@ class DilatedQueue:
             self.data = Variable(dtype(num_channels, max_length).zero_())
 
     def enqueue(self, input):
+        if not isinstance(input, Variable) and isinstance(self.data, Variable):
+            input = Variable(input)
+
         self.data[:, self.in_pos] = input
         self.in_pos = (self.in_pos + 1) % self.max_length
 
@@ -168,18 +169,19 @@ def dilate(sigs, dilation):
     TODO: let this function take in 4d tensors (B, N, L, C)
     Note this will fail if the dilation doesn't allow a whole number amount of padding
 
-    :param sig: Tensor or Variable of size (N, L, C), where N is the input
+    :param sig: Tensor or Variable of size (D, L, C), where D is the input
                 dilation, C is the number of channels, and L is the input length
     :param dilation: Target dilation. Will be the size of the first dimension
                      of the output tensor.
 
     :return: The dilated Tensor or Variable of size
-             (dilation, C, L*N / dilation). The output might be zero padded
+             (dilation, C, L*D / dilation). The output might be zero padded
              at the start
     """
-
+    print('orig size: {}'.format(sigs.size()))
     n, c, l = sigs.size()
     dilation_factor = dilation / n
+    print('dilation factor: {}'.format(dilation_factor))
     if dilation_factor == 1:
         return sigs, 0.
 
@@ -187,15 +189,23 @@ def dilate(sigs, dilation):
     new_n = int(dilation)
     new_l = int(np.ceil(l*n/dilation))
     pad_len = (new_n*new_l-n*l)/n
+    pad_uneven = int((new_n*new_l-n*l)%n)
+
+    #print('({}, {}, {}) -> ({}, {}, {})'.format(n, c, l, new_n, c, new_l))
 
     if pad_len > 0:
         print("Padding: {}, {}, {}".format(new_n, new_l, pad_len))
         # TODO pad output tensor unevenly for indivisible dilations
         assert pad_len == int(pad_len)
-        # "squeeze" then "unsqueeze" due to limitation of pad function
-        # which only works with 4d/5d tensors
-        padding = (int(pad_len), 0, 0, 0) # (d3_St, d3_End, d2_St, d2_End), d0 and d1 unpadded
-        sigs = pad1d(sigs, padding)
+        pad_len = int(pad_len)
+        padding = (pad_len, 0) # padding on last dimension
+        sigs = nn.ConstantPad1d(padding, 0.)(sigs)
+    elif pad_uneven > 0:
+        # the idea here to to pad the total length of the signal by pad_uneven
+        # not each dilation channel by pad_len (total = pad_len * d_channels)
+        #padding = (pad_uneven, 0)
+        raise NotImplementedError
+
 
     # reshape according to dilation
     sigs = sigs.permute(1, 2, 0).contiguous()  # (n, c, l) -> (c, l, n)
@@ -203,69 +213,3 @@ def dilate(sigs, dilation):
     sigs = sigs.permute(2, 0, 1).contiguous()  # (c, l, n) -> (n, c, l)
 
     return sigs, pad_len
-
-class ConstantPad1d(nn.Module):
-    r"""Pads the input tensor boundaries with a constant value.
-
-    Accepts 3d, 4d, 5d tensors, which is different than the normal PadXd functions
-
-    Args:
-        padding (int, tuple): the size of the padding.
-            If is int, uses the same padding in all boundaries.
-            if a 2-tuple, uses: (d2_padding, d1_padding), equal on both sides
-            If a 4-tuple, uses
-            (d2_paddingFront, d2_paddingBack,
-             d1_paddingFront, d1_paddingBack)
-
-
-    Shape:
-        - Input: :math:`(d0, d1_{in}, d2_{in})`
-        - Output: :math:`(d0, d1_{out}, d2_{out})` where
-          :math:`d2_{out} = d2_{in} + d2_paddingFront + d2_paddingBack`
-          :math:`d1_{out} = d1_{in} + d1_paddingFront + d1_paddingBack`
-
-    Examples::
-
-        >>> m = nn.ConstantPad1d(3, 3.5)
-        >>> input = autograd.Variable(torch.randn(3, 320, 480))
-        >>> output = m(input)
-        >>> # using different paddings
-        >>> m = nn.ConstantPad1d((3, 3, 6, 6), 3.5)
-        >>> output = m(input)
-
-    """
-
-    def __init__(self, padding, value=0):
-        super(ConstantPad1d, self).__init__()
-        self.padding = self._quadruple(padding)
-        self.value = value
-
-    def forward(self, input):
-        x = input
-        if len(x.size()) == 3:
-            x = x.view((1,)+x.size())
-            x = F.pad(x, self.padding, 'constant', self.value)
-            x = x.view(x.size()[1:])
-        return x
-
-    def __repr__(self):
-        return self.__class__.__name__ + ' ' + str(self.padding)
-
-    def _quadruple(self, padding):
-        if isinstance(padding, int):
-            padding = tuple([padding]*4)
-        elif len(padding) == 2:
-            padding = tuple([padding[0]]*2+[padding[1]]*2)
-        assert len(padding) == 4
-        return padding
-
-def pad1d(input,padding,pad_value=0):
-    return ConstantPad1d(padding, pad_value)(input)
-
-def tensorpad1d(input,padding,pad_tensor=None):
-    if pad_tensor is None:
-        if input.size(0) == 1:
-            pad_tensor = input
-        else:
-            pad_tensor = torch.cat((input[0,:,:].unsqueeze(0), input[:-1, :, :]), 0)
-    return torch.cat((pad_tensor[:,:,-padding[0]:], input), -1)

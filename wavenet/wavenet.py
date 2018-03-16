@@ -93,6 +93,9 @@ class FastWaveNet(nn.Module):
         self.residual_convs = []
         self.skip_convs = []
 
+        # padding
+        self.pad1d = nn.ConstantPad1d((1, 0), 0.)
+
         # filter non-linearity
         self.filter_act = F.tanh
 
@@ -191,8 +194,7 @@ class FastWaveNet(nn.Module):
             # dilation Convolutions
             if pad_res == 0:
                 self.pad_num += 1
-                res = tensorpad1d(res, (1, 0, 0, 0))
-                #res = pad1d(res,(1, 0, 0, 0),pad_value=0)
+                res = self.pad1d(res)
             else:
                 print("pad_res: {}".format(pad_res))
                 pass

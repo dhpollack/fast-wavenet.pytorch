@@ -16,5 +16,5 @@ I created a [similar repo](https://github.com/dhpollack/bytenet.pytorch) for byt
 ### Testing
 
 ```sh
-python -m test.layers_test 
+python -m test.test_wavenet Test_wavenet.test3_wavenet_dummy 
 ```
