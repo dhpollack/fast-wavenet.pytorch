@@ -60,6 +60,7 @@ class FastWaveNet(nn.Module):
                  quantization_channels=256,
                  input_len=16000,
                  audio_channels=1,
+                 batch_size=1,
                  kernel_size=2):
         super(FastWaveNet, self).__init__()
         # variables
@@ -76,13 +77,14 @@ class FastWaveNet(nn.Module):
         self.skip_channels = skip_channels * audio_channels
         self.kernel_size = kernel_size
         self.quantization_channels = quantization_channels
+        self.batch_size = batch_size
 
         # debugging
         self.sizes = []
 
         # build model
         receptive_field = 1
-        init_dilation = 1
+        init_dilation = self.batch_size
 
         self.dilations = []
         self.dilated_queues = []
@@ -173,21 +175,24 @@ class FastWaveNet(nn.Module):
                 self.residual_convs[i].input_tied_modules.append(self.skip_convs[i-1])
                 self.residual_convs[i].input_tied_modules.append(self.filter_convs[i])
                 self.residual_convs[i].input_tied_modules.append(self.gate_convs[i])
-    def forward(self, input):
+    def forward(self, input, prev=None):
+        self.pad_num = 0
         ob, oc, ol = input.size()
         self.sizes.append(input.size())
-
+        if prev is None:
+            prev = input
         x = self.conv0(input)
         self.sizes.append(x.size())
         skip = 0
-
         for i in range(int(self.blocks*self.layers)):
             (dil, init_dil) = self.dilations[i]
             res, pad_res = dilate(x, dil)
 
             # dilation Convolutions
             if pad_res == 0:
-                res = pad1d(res,(1, 0, 0, 0),pad_value=0)
+                self.pad_num += 1
+                res = tensorpad1d(res, (1, 0, 0, 0))
+                #res = pad1d(res,(1, 0, 0, 0),pad_value=0)
             else:
                 print("pad_res: {}".format(pad_res))
                 pass
@@ -224,12 +229,29 @@ class FastWaveNet(nn.Module):
         x = self.conv_out(x)
         self.sizes.append("last conv before resize")
         self.sizes.append(x.size())
-        x, _ = dilate(x, self.audio_channels) # only works with 1 channel for now
+        x, _ = dilate(x, self.batch_size) # only works with 1 channel for now
         x = self.nl_end(x)
         x = self.conv_end(x)
         self.sizes.append(x.size())
 
         return x
+
+    def generate(self):
+        '''Generate new samples from given samples and then from the generated
+           samples themself.  It looks like we'll begin with one sample that
+           generate n samples
+
+           Args:
+                N: (int) number of samples to generate
+                init_sig: (FloatTensor) BxCxL, batch, channels, length
+
+           Output:
+                x: (FloatTensor) Bx(Cxquant_channels)xL, batch, channels *
+                    quantization channels (default: 256), length.  length = N ?
+
+        '''
+        # TODO
+        pass
 
     def parameter_count(self):
         par = list(self.parameters())

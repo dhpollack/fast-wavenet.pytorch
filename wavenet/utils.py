@@ -17,13 +17,23 @@ def prime_factors(n):
 
 def mu_law_encoding(x, quantization_channels):
     mu = quantization_channels - 1.
-    x_mu = np.sign(x) * np.log1p(mu * np.abs(x)) / np.log1p(mu)
-    return ((x_mu + 1) / 2 * mu + 0.5).astype(int)
+    if isinstance(x, np.ndarray):
+        x_mu = np.sign(x) * np.log1p(mu * np.abs(x)) / np.log1p(mu)
+        x_mu = ((x_mu + 1) / 2 * mu + 0.5).astype(int)
+    elif isinstance(x, torch.Tensor):
+        x_mu = torch.sign(x) * torch.log1p(mu * torch.abs(x)) / torch.log1p(mu)
+        x_mu = ((x_mu + 1) / 2 * mu + 0.5).long()
+    return x_mu
 
 def mu_law_expansion(x_mu, quantization_channels):
     mu = quantization_channels - 1.
-    x = ((x_mu) / mu) * 2 - 1.
-    return np.sign(x) * (np.exp(np.abs(x) * np.log1p(mu)) - 1.) / mu
+    if isinstance(x_mu, np.ndarray):
+        x = ((x_mu) / mu) * 2 - 1.
+        x = np.sign(x) * (np.exp(np.abs(x) * np.log1p(mu)) - 1.) / mu
+    elif isinstance(x_mu, torch.Tensor):
+        x = ((x_mu) / mu) * 2 - 1.
+        x = torch.sign(x) * (torch.exp(torch.abs(x) * torch.log1p(mu)) - 1.) / mu
+    return x
 
 
 

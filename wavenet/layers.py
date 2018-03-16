@@ -165,13 +165,17 @@ class DilatedQueue:
 
 def dilate(sigs, dilation):
     """
-
+    TODO: let this function take in 4d tensors (B, N, L, C)
     Note this will fail if the dilation doesn't allow a whole number amount of padding
 
-    :param x: Tensor or Variable of size (N, L, C), where N is the input dilation, C is the number of channels, and L is the input length
-    :param dilation: Target dilation. Will be the size of the first dimension of the output tensor.
-    :param pad_start: If the input length is not compatible with the specified dilation, zero padding is used. This parameter determines wether the zeros are added at the start or at the end.
-    :return: The dilated Tensor or Variable of size (dilation, C, L*N / dilation). The output might be zero padded at the start
+    :param sig: Tensor or Variable of size (N, L, C), where N is the input
+                dilation, C is the number of channels, and L is the input length
+    :param dilation: Target dilation. Will be the size of the first dimension
+                     of the output tensor.
+
+    :return: The dilated Tensor or Variable of size
+             (dilation, C, L*N / dilation). The output might be zero padded
+             at the start
     """
 
     n, c, l = sigs.size()
@@ -183,6 +187,7 @@ def dilate(sigs, dilation):
     new_n = int(dilation)
     new_l = int(np.ceil(l*n/dilation))
     pad_len = (new_n*new_l-n*l)/n
+
     if pad_len > 0:
         print("Padding: {}, {}, {}".format(new_n, new_l, pad_len))
         # TODO pad output tensor unevenly for indivisible dilations
@@ -256,3 +261,11 @@ class ConstantPad1d(nn.Module):
 
 def pad1d(input,padding,pad_value=0):
     return ConstantPad1d(padding, pad_value)(input)
+
+def tensorpad1d(input,padding,pad_tensor=None):
+    if pad_tensor is None:
+        if input.size(0) == 1:
+            pad_tensor = input
+        else:
+            pad_tensor = torch.cat((input[0,:,:].unsqueeze(0), input[:-1, :, :]), 0)
+    return torch.cat((pad_tensor[:,:,-padding[0]:], input), -1)

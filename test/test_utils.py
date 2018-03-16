@@ -25,6 +25,9 @@ class Test_mu_law(unittest.TestCase):
         mse = np.linalg.norm(diff) / diff.shape[0]
         print(mse, np.isclose(mse, 0., atol=1e-4))
 
+        sig = self.sig
+
+
     def test2_prime_factorization(self):
         num = 100
         factors_true = [2, 2, 5, 5]

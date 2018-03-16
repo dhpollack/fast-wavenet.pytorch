@@ -220,5 +220,86 @@ class Test_wavenet(unittest.TestCase):
 
         torchaudio.save("test/data/david_16000hz_output_sample.wav", output, sr//3)
 
+    def test5_wavenet_batch(self):
+        num_samples = 1<<10
+        batches = 10
+        epochs = 10
+        input = torch.rand(1, 1, num_samples) * torch.rand(batches, 1, 1)
+        labels = input.numpy()
+        labels = mu_law_encoding(labels, 256)
+        labels = torch.from_numpy(labels).squeeze().long()
+        m = FastWaveNet(layers=8, # less than non-unique prime factors in input size
+                        blocks=2, # number of blocks
+                        residual_channels=16,
+                        dilation_channels=32,
+                        skip_channels=16,
+                        quantization_channels=256,
+                        input_len=num_samples,
+                        batch_size=input.size(0),
+                        kernel_size=2)
+        criterion = torch.nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(m.parameters(), lr=0.01)
+        if self.use_cuda:
+            m, input, labels = m.cuda(), input.cuda(), labels.cuda()
+        input, labels = Variable(input), Variable(labels)
+        labels = labels.view(1, -1).squeeze()
+        losses = []
+        # forward pass
+        for epoch in range(epochs):
+            m.zero_grad()
+            output = m(input)
+            output = output.view(-1, output.size(1))
+            loss = criterion(output, labels)
+            losses.append(loss.data[0])
+            loss.backward()
+            optimizer.step()
+            print("loss of {} at epoch {}".format(losses[-1], epoch+1))
+
+    def test6_wavenet_selfpad(self):
+        num_samples = 1<<12
+        batches = 30
+        input = torch.linspace(0, 20*np.pi, num_samples*batches)
+        input = torch.sin(input)
+        input = input.view(batches, 1, -1)
+        #input = torch.rand(1, 1, num_samples) * torch.rand(batches, 1, 1)
+        labels = input.numpy()
+        labels = mu_law_encoding(labels, 256)
+        labels = torch.from_numpy(labels).squeeze().long()
+        m = FastWaveNet(layers=8, # less than non-unique prime factors in input size
+                        blocks=3, # number of blocks
+                        residual_channels=16,
+                        dilation_channels=32,
+                        skip_channels=16,
+                        quantization_channels=256,
+                        input_len=num_samples,
+                        batch_size=input.size(0),
+                        kernel_size=2)
+        criterion = torch.nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(m.parameters(), lr=0.01)
+        if self.use_cuda:
+            m, input, labels = m.cuda(), input.cuda(), labels.cuda()
+        input, labels = Variable(input), Variable(labels)
+        labels = labels.view(1, -1).squeeze()
+        losses = []
+        print(input.data)
+        m(input)
+        print(m)
+        print(m.pad_num)
+
+        epochs = 10
+
+
+        # forward pass
+        #for epoch in range(epochs):
+        #    m.zero_grad()
+        #    output = m(input)
+        #    output = output.view(-1, output.size(1))
+        #    loss = criterion(output, labels)
+        #    losses.append(loss.data[0])
+        #    loss.backward()
+        #    optimizer.step()
+        #    print("loss of {} at epoch {}".format(losses[-1], epoch+1))
+
+
 if __name__ == '__main__':
     unittest.main()
